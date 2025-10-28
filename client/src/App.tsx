@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { Web3Provider } from "./contexts/Web3Context";
 import Home from "./pages/Home";
 
 function Router() {
@@ -25,14 +26,13 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+      <ThemeProvider defaultTheme="dark">
+        <Web3Provider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </Web3Provider>
       </ThemeProvider>
     </ErrorBoundary>
   );
