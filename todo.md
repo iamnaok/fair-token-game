@@ -53,3 +53,7 @@
 - [ ] Create FAQ section
 - [ ] Add analytics tracking
 - [ ] Final security review
+
+## Bug Fixes
+- [x] Fix WalletConnect project ID error
+- [x] Fix Button component ref warning

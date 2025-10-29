@@ -1,9 +1,6 @@
 import { http, createConfig } from 'wagmi';
 import { base, baseSepolia } from 'wagmi/chains';
-import { injected, coinbaseWallet, walletConnect } from 'wagmi/connectors';
-
-// WalletConnect project ID - replace with your own
-const projectId = 'YOUR_WALLETCONNECT_PROJECT_ID';
+import { injected, coinbaseWallet } from 'wagmi/connectors';
 
 export const config = createConfig({
   chains: [base, baseSepolia],
@@ -12,7 +9,6 @@ export const config = createConfig({
     coinbaseWallet({
       appName: '$FAIR - Provably Fair Mining Game',
     }),
-    walletConnect({ projectId }),
   ],
   transports: {
     [base.id]: http(),
