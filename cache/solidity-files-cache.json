@@ -690,8 +690,8 @@
       ]
     },
     "/home/ubuntu/fair-token-game/contracts/MiningStaking.sol": {
-      "lastModificationDate": 1761673389172,
-      "contentHash": "f15fc5d11fef5738c31110b0b5b9b462",
+      "lastModificationDate": 1761750115815,
+      "contentHash": "c497361c9647fc6d9f8b192bbc7c63dd",
       "sourceName": "contracts/MiningStaking.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -723,6 +723,7 @@
         "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol",
         "@openzeppelin/contracts/access/Ownable.sol",
         "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "@openzeppelin/contracts/utils/Pausable.sol",
         "./FAIRMiner.sol"
       ],
       "versionPragmas": [
@@ -884,8 +885,8 @@
       ]
     },
     "/home/ubuntu/fair-token-game/contracts/RevenueDistributor.sol": {
-      "lastModificationDate": 1761673715861,
-      "contentHash": "da005f5f8a06a7b389724fd6dc053be4",
+      "lastModificationDate": 1761823714534,
+      "contentHash": "838b3f5fb5a2d5beac7062756bb338e1",
       "sourceName": "contracts/RevenueDistributor.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -914,7 +915,8 @@
       "imports": [
         "@openzeppelin/contracts/token/ERC20/IERC20.sol",
         "@openzeppelin/contracts/access/Ownable.sol",
-        "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "@openzeppelin/contracts/utils/Pausable.sol"
       ],
       "versionPragmas": [
         "^0.8.20"
@@ -924,8 +926,8 @@
       ]
     },
     "/home/ubuntu/fair-token-game/contracts/PrivacyPool.sol": {
-      "lastModificationDate": 1761673758706,
-      "contentHash": "c70ea575b98dca6fa55fed53f011518f",
+      "lastModificationDate": 1761750140331,
+      "contentHash": "18c4ba279398acd7816f72e0132f5693",
       "sourceName": "contracts/PrivacyPool.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -951,11 +953,7 @@
           }
         }
       },
-      "imports": [
-        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-        "@openzeppelin/contracts/access/Ownable.sol",
-        "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
-      ],
+      "imports": [],
       "versionPragmas": [
         "^0.8.20"
       ],
@@ -964,8 +962,8 @@
       ]
     },
     "/home/ubuntu/fair-token-game/contracts/MinerSale.sol": {
-      "lastModificationDate": 1761673349519,
-      "contentHash": "8c213a822d0974131638b42e743152cc",
+      "lastModificationDate": 1761823776075,
+      "contentHash": "12b8c5ac99caa79d9e134d900775bb2c",
       "sourceName": "contracts/MinerSale.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -995,6 +993,7 @@
         "@openzeppelin/contracts/token/ERC20/IERC20.sol",
         "@openzeppelin/contracts/access/Ownable.sol",
         "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "@openzeppelin/contracts/utils/Pausable.sol",
         "./FAIRMiner.sol"
       ],
       "versionPragmas": [
@@ -1041,6 +1040,44 @@
       ],
       "artifacts": [
         "FAIRToken"
+      ]
+    },
+    "/home/ubuntu/fair-token-game/node_modules/.pnpm/@openzeppelin+contracts@5.4.0/node_modules/@openzeppelin/contracts/utils/Pausable.sol": {
+      "lastModificationDate": 1761673257595,
+      "contentHash": "0d47b53e10b1985efbb396f937626279",
+      "sourceName": "@openzeppelin/contracts/utils/Pausable.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../utils/Context.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Pausable"
       ]
     }
   }

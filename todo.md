@@ -107,3 +107,42 @@
 - [x] Generate Elite miner artwork (premium version)
 - [ ] Create NFT metadata JSON files
 - [x] Update AnimatedMiner component to use real artwork
+
+## Security Improvements (from Re-Audit)
+- [x] Add timelock to emergency withdraw in RevenueDistributor (7 days delay)
+- [ ] Add emission announcement period to MiningStaking (7 days notice)
+- [x] Add price bounds to setTierPrice() (max 50% change)
+- [x] Fix event emission in purchaseMiners() to use getTierPrice()
+- [ ] Review reward calculation precision in MiningStaking
+- [ ] Automate snapshot updates in RevenueDistributor
+- [ ] Add multi-sig for owner role (consider Gnosis Safe)
+
+## Critical Infrastructure (BLOCKERS)
+- [x] Write comprehensive test suite for all contracts
+- [x] Create deployment scripts for Base mainnet
+- [x] Create deployment scripts for Base Sepolia testnet
+- [x] Create contract verification scripts
+- [ ] Export contract ABIs for frontend
+- [ ] Create .env.example with required variables
+
+## Frontend Integration (CRITICAL)
+- [ ] Remove all privacy pool references from README
+- [ ] Remove privacy section from landing page
+- [ ] Add contract addresses configuration
+- [ ] Implement transaction handling logic
+- [ ] Connect wallet to actual contracts
+- [ ] Implement NFT purchase flow
+- [ ] Implement staking flow
+- [ ] Implement rewards claiming flow
+- [ ] Implement revenue claiming flow
+- [ ] Add transaction status feedback
+- [ ] Add error handling
+- [ ] Add loading states
+
+## Testing & Deployment
+- [ ] Deploy to Base Sepolia testnet
+- [ ] Test all user flows end-to-end on testnet
+- [ ] Create deployment checklist
+- [ ] Professional security audit (budget $10k-$30k)
+- [ ] Bug bounty program
+- [ ] Legal review

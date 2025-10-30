@@ -27,9 +27,15 @@ contract RevenueDistributor is Ownable, ReentrancyGuard, Pausable {
     // Total supply snapshot for calculations
     uint256 public totalSupplySnapshot;
     
+    // Emergency withdraw timelock
+    uint256 public emergencyWithdrawTime;
+    uint256 public constant EMERGENCY_DELAY = 7 days;
+    
     event RevenueReceived(uint256 amount, uint256 newRewardPerToken);
     event RewardsClaimed(address indexed user, uint256 amount);
     event SnapshotUpdated(uint256 totalSupply);
+    event EmergencyWithdrawInitiated(uint256 executeTime);
+    event EmergencyWithdrawExecuted(uint256 amount);
 
     constructor(address _fairToken) Ownable(msg.sender) {
         require(_fairToken != address(0), "Invalid token address");
@@ -148,14 +154,38 @@ contract RevenueDistributor is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @dev Emergency withdraw (owner only, for contract upgrades)
+     * @dev Initiate emergency withdraw (owner only, requires 7 day delay)
+     */
+    function initiateEmergencyWithdraw() external onlyOwner whenPaused {
+        require(emergencyWithdrawTime == 0, "Already initiated");
+        emergencyWithdrawTime = block.timestamp;
+        emit EmergencyWithdrawInitiated(block.timestamp + EMERGENCY_DELAY);
+    }
+    
+    /**
+     * @dev Execute emergency withdraw after timelock (owner only, for contract upgrades)
+     * Gives users 7 days to claim their rewards before withdrawal
      */
     function emergencyWithdraw() external onlyOwner whenPaused {
+        require(emergencyWithdrawTime > 0, "Not initiated");
+        require(block.timestamp >= emergencyWithdrawTime + EMERGENCY_DELAY, "Too early");
+        
         uint256 balance = fairToken.balanceOf(address(this));
         require(balance > 0, "No balance");
+        
         require(
             fairToken.transfer(owner(), balance),
             "Transfer failed"
         );
+        
+        emit EmergencyWithdrawExecuted(balance);
+    }
+    
+    /**
+     * @dev Cancel emergency withdraw
+     */
+    function cancelEmergencyWithdraw() external onlyOwner {
+        require(emergencyWithdrawTime > 0, "Not initiated");
+        emergencyWithdrawTime = 0;
     }
 }

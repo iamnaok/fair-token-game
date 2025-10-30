@@ -140,9 +140,10 @@ contract MinerSale is Ownable, ReentrancyGuard, Pausable {
         
         // Mint NFTs to buyer
         uint256[] memory tokenIds = new uint256[](quantity);
+        uint256 actualPrice = getTierPrice(tier);
         for (uint256 i = 0; i < quantity; i++) {
             tokenIds[i] = fairMiner.mint(msg.sender, tier);
-            emit MinerPurchased(msg.sender, tokenIds[i], tier, config.price);
+            emit MinerPurchased(msg.sender, tokenIds[i], tier, actualPrice);
         }
         
         return tokenIds;
@@ -183,9 +184,19 @@ contract MinerSale is Ownable, ReentrancyGuard, Pausable {
     /**
      * @dev Set tier price override (owner only)
      * Allows dynamic pricing based on market conditions
+     * Limited to 50% change to prevent price manipulation
      */
     function setTierPrice(FAIRMiner.MinerTier tier, uint256 newPrice) external onlyOwner {
         require(newPrice > 0, "Invalid price");
+        
+        uint256 currentPrice = getTierPrice(tier);
+        if (currentPrice > 0) {
+            // Max 50% price change to prevent manipulation
+            uint256 maxPrice = currentPrice * 150 / 100;
+            uint256 minPrice = currentPrice * 50 / 100;
+            require(newPrice >= minPrice && newPrice <= maxPrice, "Price change too large");
+        }
+        
         tierPriceOverrides[tier] = newPrice;
         emit TierPriceUpdated(tier, newPrice);
     }
@@ -194,8 +205,8 @@ contract MinerSale is Ownable, ReentrancyGuard, Pausable {
      * @dev Get effective tier price (override or default)
      */
     function getTierPrice(FAIRMiner.MinerTier tier) public view returns (uint256) {
-        uint256 override = tierPriceOverrides[tier];
-        if (override > 0) return override;
+        uint256 priceOverride = tierPriceOverrides[tier];
+        if (priceOverride > 0) return priceOverride;
         return fairMiner.getTierConfig(tier).price;
     }
 
