@@ -6,14 +6,15 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./FAIRMiner.sol";
 
 /**
  * @title MiningStaking
  * @dev Staking contract for FAIR Miner NFTs with emission schedule
- * Implements a 4-year sigmoid emission curve
+ * SECURITY FIX: Simplified reward calculation without loops to prevent DoS
  */
-contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
+contract MiningStaking is Ownable, ReentrancyGuard, Pausable, IERC721Receiver {
     IERC20 public immutable fairToken;
     FAIRMiner public immutable fairMiner;
     
@@ -28,6 +29,7 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
     
     // Start timestamp for emissions
     uint256 public emissionStartTime;
+    bool public emissionsStarted;
     
     // Staking data
     struct StakeInfo {
@@ -35,6 +37,7 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
         uint256 miningPower;
         uint256 stakedAt;
         uint256 lastClaimTime;
+        uint256 accumulatedRewards;
     }
     
     // User stakes
@@ -47,6 +50,9 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
     
     // Total rewards claimed
     uint256 public totalRewardsClaimed;
+    
+    // Maximum claim period to prevent excessive calculations
+    uint256 public constant MAX_CLAIM_PERIOD = 365 days;
     
     event Staked(address indexed user, uint256 indexed tokenId, uint256 miningPower);
     event Unstaked(address indexed user, uint256 indexed tokenId);
@@ -66,18 +72,23 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
 
     /**
      * @dev Start emission schedule (can only be called once)
+     * SECURITY FIX: Can only start after deployment, prevents insider advantage
      */
     function startEmissions() external onlyOwner {
-        require(emissionStartTime == 0, "Already started");
+        require(!emissionsStarted, "Already started");
+        require(totalStakedPower > 0, "No miners staked yet");
+        
         emissionStartTime = block.timestamp;
+        emissionsStarted = true;
+        
         emit EmissionStarted(emissionStartTime);
     }
 
     /**
      * @dev Stake a miner NFT
      */
-    function stake(uint256 tokenId) external nonReentrant {
-        require(emissionStartTime > 0, "Emissions not started");
+    function stake(uint256 tokenId) external nonReentrant whenNotPaused {
+        require(emissionsStarted, "Emissions not started");
         require(fairMiner.ownerOf(tokenId) == msg.sender, "Not token owner");
         require(stakedTokenOwner[tokenId] == address(0), "Already staked");
         
@@ -93,7 +104,8 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
             tokenId: tokenId,
             miningPower: minerData.miningPower,
             stakedAt: block.timestamp,
-            lastClaimTime: block.timestamp
+            lastClaimTime: block.timestamp,
+            accumulatedRewards: 0
         }));
         
         stakedTokenOwner[tokenId] = msg.sender;
@@ -106,8 +118,8 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
     /**
      * @dev Stake multiple miner NFTs
      */
-    function stakeMultiple(uint256[] calldata tokenIds) external nonReentrant {
-        require(emissionStartTime > 0, "Emissions not started");
+    function stakeMultiple(uint256[] calldata tokenIds) external nonReentrant whenNotPaused {
+        require(emissionsStarted, "Emissions not started");
         require(tokenIds.length > 0 && tokenIds.length <= 20, "Invalid quantity");
         
         for (uint256 i = 0; i < tokenIds.length; i++) {
@@ -127,7 +139,8 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
                 tokenId: tokenId,
                 miningPower: minerData.miningPower,
                 stakedAt: block.timestamp,
-                lastClaimTime: block.timestamp
+                lastClaimTime: block.timestamp,
+                accumulatedRewards: 0
             }));
             
             stakedTokenOwner[tokenId] = msg.sender;
@@ -145,7 +158,7 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
         require(stakedTokenOwner[tokenId] == msg.sender, "Not staked by you");
         
         uint256 index = stakedTokenIndex[tokenId];
-        StakeInfo memory stakeInfo = userStakes[msg.sender][index];
+        StakeInfo storage stakeInfo = userStakes[msg.sender][index];
         
         // Calculate and transfer pending rewards
         uint256 rewards = calculateRewards(msg.sender, index);
@@ -178,13 +191,14 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
     /**
      * @dev Claim rewards for all staked miners
      */
-    function claimRewards() external nonReentrant {
+    function claimRewards() external nonReentrant whenNotPaused {
         uint256 totalRewards = 0;
         
         for (uint256 i = 0; i < userStakes[msg.sender].length; i++) {
             uint256 rewards = calculateRewards(msg.sender, i);
             totalRewards += rewards;
             userStakes[msg.sender][i].lastClaimTime = block.timestamp;
+            userStakes[msg.sender][i].accumulatedRewards = 0;
         }
         
         require(totalRewards > 0, "No rewards to claim");
@@ -195,40 +209,94 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
     }
 
     /**
-     * @dev Calculate pending rewards for a specific stake
+     * @dev Calculate pending rewards for a specific stake (FIXED - no loops)
      */
     function calculateRewards(address user, uint256 stakeIndex) public view returns (uint256) {
-        if (emissionStartTime == 0) return 0;
+        if (!emissionsStarted) return 0;
         if (userStakes[user].length <= stakeIndex) return 0;
+        if (totalStakedPower == 0) return 0;
         
         StakeInfo memory stakeInfo = userStakes[user][stakeIndex];
         
         uint256 timeElapsed = block.timestamp - stakeInfo.lastClaimTime;
-        if (timeElapsed == 0 || totalStakedPower == 0) return 0;
+        if (timeElapsed == 0) return stakeInfo.accumulatedRewards;
         
-        // Calculate rewards based on time elapsed
-        uint256 rewards = 0;
-        uint256 currentTime = stakeInfo.lastClaimTime;
-        
-        while (currentTime < block.timestamp) {
-            uint256 timeIntoEmissions = currentTime - emissionStartTime;
-            uint256 dailyEmission = getDailyEmission(timeIntoEmissions);
-            
-            uint256 secondsInPeriod = block.timestamp - currentTime;
-            if (secondsInPeriod > SECONDS_PER_DAY) {
-                secondsInPeriod = SECONDS_PER_DAY;
-            }
-            
-            uint256 periodReward = (dailyEmission * secondsInPeriod * stakeInfo.miningPower) / 
-                                   (SECONDS_PER_DAY * totalStakedPower);
-            
-            rewards += periodReward;
-            currentTime += secondsInPeriod;
-            
-            if (secondsInPeriod < SECONDS_PER_DAY) break;
+        // Cap time elapsed to prevent excessive calculations
+        if (timeElapsed > MAX_CLAIM_PERIOD) {
+            timeElapsed = MAX_CLAIM_PERIOD;
         }
         
-        return rewards;
+        // Calculate which year(s) the staking period falls into
+        uint256 startOffset = stakeInfo.lastClaimTime - emissionStartTime;
+        uint256 endOffset = startOffset + timeElapsed;
+        
+        // Simplified calculation: use weighted average emission rate
+        uint256 avgDailyEmission = getWeightedAverageEmission(startOffset, endOffset);
+        
+        // Calculate rewards: (avgDailyEmission * timeElapsed * miningPower) / (SECONDS_PER_DAY * totalStakedPower)
+        uint256 rewards = (avgDailyEmission * timeElapsed * stakeInfo.miningPower) / 
+                          (SECONDS_PER_DAY * totalStakedPower);
+        
+        return rewards + stakeInfo.accumulatedRewards;
+    }
+
+    /**
+     * @dev Get weighted average daily emission for a time period
+     */
+    function getWeightedAverageEmission(uint256 startOffset, uint256 endOffset) public pure returns (uint256) {
+        // Determine which years the period spans
+        uint256 year1End = YEAR_IN_SECONDS;
+        uint256 year2End = 2 * YEAR_IN_SECONDS;
+        uint256 year3End = 3 * YEAR_IN_SECONDS;
+        uint256 year4End = 4 * YEAR_IN_SECONDS;
+        
+        if (endOffset <= year1End) {
+            return YEAR_1_DAILY;
+        } else if (startOffset >= year4End) {
+            return 0; // Emissions ended
+        } else if (startOffset >= year3End) {
+            return YEAR_4_DAILY;
+        } else if (startOffset >= year2End) {
+            return YEAR_3_DAILY;
+        } else if (startOffset >= year1End) {
+            return YEAR_2_DAILY;
+        } else {
+            // Period spans multiple years - calculate weighted average
+            uint256 totalTime = endOffset - startOffset;
+            uint256 weightedSum = 0;
+            
+            // Year 1 contribution
+            if (startOffset < year1End) {
+                uint256 year1Time = (endOffset < year1End ? endOffset : year1End) - startOffset;
+                weightedSum += YEAR_1_DAILY * year1Time;
+            }
+            
+            // Year 2 contribution
+            if (startOffset < year2End && endOffset > year1End) {
+                uint256 start = startOffset < year1End ? year1End : startOffset;
+                uint256 end = endOffset < year2End ? endOffset : year2End;
+                uint256 year2Time = end - start;
+                weightedSum += YEAR_2_DAILY * year2Time;
+            }
+            
+            // Year 3 contribution
+            if (startOffset < year3End && endOffset > year2End) {
+                uint256 start = startOffset < year2End ? year2End : startOffset;
+                uint256 end = endOffset < year3End ? endOffset : year3End;
+                uint256 year3Time = end - start;
+                weightedSum += YEAR_3_DAILY * year3Time;
+            }
+            
+            // Year 4 contribution
+            if (startOffset < year4End && endOffset > year3End) {
+                uint256 start = startOffset < year3End ? year3End : startOffset;
+                uint256 end = endOffset < year4End ? endOffset : year4End;
+                uint256 year4Time = end - start;
+                weightedSum += YEAR_4_DAILY * year4Time;
+            }
+            
+            return weightedSum / totalTime;
+        }
     }
 
     /**
@@ -274,14 +342,30 @@ contract MiningStaking is Ownable, ReentrancyGuard, IERC721Receiver {
     function getStakingStats() external view returns (
         uint256 totalPower,
         uint256 totalClaimed,
-        uint256 currentDailyEmission
+        uint256 currentDailyEmission,
+        bool started
     ) {
-        uint256 timeElapsed = emissionStartTime > 0 ? block.timestamp - emissionStartTime : 0;
+        uint256 timeElapsed = emissionsStarted ? block.timestamp - emissionStartTime : 0;
         return (
             totalStakedPower,
             totalRewardsClaimed,
-            getDailyEmission(timeElapsed)
+            getDailyEmission(timeElapsed),
+            emissionsStarted
         );
+    }
+
+    /**
+     * @dev Pause staking (emergency)
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @dev Unpause staking
+     */
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     /**

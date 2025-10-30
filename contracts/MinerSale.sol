@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./FAIRMiner.sol";
 
 /**
@@ -11,7 +12,7 @@ import "./FAIRMiner.sol";
  * @dev Handles the sale of FAIR Miner NFTs for FAIR tokens
  * Distributes revenue: 0.5% to protocol, 99.5% to revenue distributor
  */
-contract MinerSale is Ownable, ReentrancyGuard {
+contract MinerSale is Ownable, ReentrancyGuard, Pausable {
     IERC20 public immutable fairToken;
     FAIRMiner public immutable fairMiner;
     address public revenueDistributor;
@@ -22,6 +23,9 @@ contract MinerSale is Ownable, ReentrancyGuard {
     
     // Sale status
     bool public saleActive;
+    
+    // Price overrides (allows dynamic pricing)
+    mapping(FAIRMiner.MinerTier => uint256) public tierPriceOverrides;
     
     // Total revenue collected
     uint256 public totalRevenue;
@@ -37,6 +41,7 @@ contract MinerSale is Ownable, ReentrancyGuard {
     event SaleStatusUpdated(bool active);
     event RevenueDistributorUpdated(address indexed distributor);
     event ProtocolRevenueWithdrawn(address indexed to, uint256 amount);
+    event TierPriceUpdated(FAIRMiner.MinerTier indexed tier, uint256 newPrice);
 
     constructor(
         address _fairToken,
@@ -56,14 +61,14 @@ contract MinerSale is Ownable, ReentrancyGuard {
     /**
      * @dev Purchase a miner NFT with FAIR tokens
      */
-    function purchaseMiner(FAIRMiner.MinerTier tier) external nonReentrant returns (uint256) {
+    function purchaseMiner(FAIRMiner.MinerTier tier) external nonReentrant whenNotPaused returns (uint256) {
         require(saleActive, "Sale not active");
         
         // Get tier configuration
         FAIRMiner.TierConfig memory config = fairMiner.getTierConfig(tier);
         require(config.minted < config.maxSupply, "Tier sold out");
         
-        uint256 price = config.price;
+        uint256 price = getTierPrice(tier);
         
         // Calculate fees
         uint256 protocolFee = (price * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
@@ -100,6 +105,7 @@ contract MinerSale is Ownable, ReentrancyGuard {
     function purchaseMiners(FAIRMiner.MinerTier tier, uint256 quantity) 
         external 
         nonReentrant 
+        whenNotPaused
         returns (uint256[] memory) 
     {
         require(saleActive, "Sale not active");
@@ -109,7 +115,7 @@ contract MinerSale is Ownable, ReentrancyGuard {
         FAIRMiner.TierConfig memory config = fairMiner.getTierConfig(tier);
         require(config.minted + quantity <= config.maxSupply, "Insufficient supply");
         
-        uint256 totalPrice = config.price * quantity;
+        uint256 totalPrice = getTierPrice(tier) * quantity;
         
         // Calculate fees
         uint256 protocolFee = (totalPrice * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
@@ -172,6 +178,39 @@ contract MinerSale is Ownable, ReentrancyGuard {
         );
         
         emit ProtocolRevenueWithdrawn(owner(), balance);
+    }
+
+    /**
+     * @dev Set tier price override (owner only)
+     * Allows dynamic pricing based on market conditions
+     */
+    function setTierPrice(FAIRMiner.MinerTier tier, uint256 newPrice) external onlyOwner {
+        require(newPrice > 0, "Invalid price");
+        tierPriceOverrides[tier] = newPrice;
+        emit TierPriceUpdated(tier, newPrice);
+    }
+
+    /**
+     * @dev Get effective tier price (override or default)
+     */
+    function getTierPrice(FAIRMiner.MinerTier tier) public view returns (uint256) {
+        uint256 override = tierPriceOverrides[tier];
+        if (override > 0) return override;
+        return fairMiner.getTierConfig(tier).price;
+    }
+
+    /**
+     * @dev Pause sales (emergency)
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @dev Unpause sales
+     */
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     /**
